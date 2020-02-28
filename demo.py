@@ -8,8 +8,8 @@ def addInMoney(df):
   InMoney = price - strike, for call options
           = strike - price, for puts
   """
-  df['InMoney'] = df.UnderlyingPrice - df.Strike
-  df.loc[df.Type == 'put', ('InMoney')] *= -1
+  df['InMoney'] = df.underlying_last - df.strike
+  df.loc[df.type == 'put', ('InMoney')] *= -1
   return df
 
 
@@ -19,13 +19,13 @@ def isStrictlyAscending(v):
 
 def addUnderlyingDiff(df):
   """Add `UnderlyingDiff` field"""
-  df['UnderlyingDiff'] = df.UnderlyingPrice.loc[:] + 0
-  grouped = df.groupby(['Expiration', 'Type', 'Strike'])
+  df['UnderlyingDiff'] = df.underlying_last.loc[:] + 0
+  grouped = df.groupby(['expiration', 'type', 'strike'])
   for ((expiration, callPut, strike), idx) in grouped.groups.items():
     subdf = df.loc[idx, :]  # copy, because non-contiguous!
-    assert isStrictlyAscending(subdf.DataDate)
+    assert isStrictlyAscending(subdf.quotedate)
 
-    price = subdf.loc[:, 'UnderlyingPrice'].values
+    price = subdf.loc[:, 'underlying_last'].values
     underlyingDiffCol = subdf.columns.values == 'UnderlyingDiff'
     subdf.iloc[1:, underlyingDiffCol] = price[1:] - price[:-1]
     subdf.iloc[0, underlyingDiffCol] = np.nan
@@ -35,10 +35,27 @@ def addUnderlyingDiff(df):
   return df
 
 
-names = 'UnderlyingSymbol,UnderlyingPrice,Exchange,OptionSymbol,Type,Expiration,DataDate,Strike,Last,Bid,Ask,Volume,OpenInterest,OI2,IV,G1,G2,G3,G4,G5,G6,Alias'.split(
-    ',')
-df = pd.read_csv('200805.csv', header=0, names=names, parse_dates=['Expiration', 'DataDate'])
+df = pd.read_csv(
+    'SPY_2018.csv',
+    parse_dates=['expiration', 'quotedate'],
+    dtype={
+        'underlying': str,
+        'underlying_last': float,
+        'strike': float,
+        'last': float,
+        'bid': float,
+        'ask': float,
+        'volume': int,
+        'openinterest': int,
+        'impliedvol': float,
+        'delta': float,
+        'theta': float,
+        'vega': float,
+        'gamma': float,
+        'IVBid': float,
+        'IVAsk': float,
+    })
 
 df = addInMoney(df)
-df['TimeToExpiration'] = df.Expiration - df.DataDate
+df['TimeToExpiration'] = df.expiration - df.quotedate
 df = addUnderlyingDiff(df)
