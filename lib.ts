@@ -1,9 +1,10 @@
 import assert from 'assert';
 import * as fs from 'fs';
 
-const dateRe = /^([0-9]{2})\/([0-9]{2})\/([0-9]{4})$/;
-function MMDDYYYYSlashToDate(s: string): Date {
-  const hit = s.match(dateRe);
+export const MMDDYYYYSlash = /^([0-9]{2})\/([0-9]{2})\/([0-9]{4})$/;
+export const MDYYYYSlash = /^([0-9]{1,2})\/([0-9]{1,2})\/([0-9]{4})$/;
+function parseDateMDY(s: string, re: RegExp = MDYYYYSlash): Date {
+  const hit = s.match(re);
   if (hit) {
     const mm = +hit[1];
     assert(mm >= 1 && mm <= 12);
@@ -13,7 +14,7 @@ function MMDDYYYYSlashToDate(s: string): Date {
     assert(yyyy >= 1970 && yyyy <= 2120);
     return new Date(Date.UTC(yyyy, mm - 1, dd));
   }
-  throw new Error('not MM/DD/YYYY ' + s);
+  throw new Error('not correct format ' + s);
 }
 
 export type Row = (string|number|Date)[];
@@ -21,9 +22,10 @@ export interface Csv {
   rows: Row[];
   cols: string[]
 }
-export function loadCsv(fname: string, wantedCols: string[], numberCols: string[], dateCols: string[]): Csv {
+export function loadCsv(fname: string, wantedCols: string[], numberCols: string[], dateCols: string[],
+                        skipTop = 0): Csv {
   let lines = fs.readFileSync(fname, 'utf8').trim().split('\n');
-  let header = lines[0].split(',').map(s => s.trim());
+  let header = lines[skipTop].split(',').map(s => s.trim());
 
   {
     let check = (v: string[], msg: string) => assert(v.every(col => header.indexOf(col) >= 0), msg);
@@ -58,7 +60,7 @@ export function loadCsv(fname: string, wantedCols: string[], numberCols: string[
     let v: (string|number|Date)[] = raw.split(',');
     numIdx.forEach(i => v[i] = parseFloat(v[i] as string));
     try {
-      dateIdx.forEach(i => v[i] = MMDDYYYYSlashToDate(v[i] as string));
+      dateIdx.forEach(i => v[i] = parseDateMDY(v[i] as string));
     } catch (err) {
       console.error(`error in ${id}`, {numIdx, dateIdx, raw, v, header});
       throw err;
@@ -68,5 +70,21 @@ export function loadCsv(fname: string, wantedCols: string[], numberCols: string[
 
   // lines might be very long so I don't want to unshift it nor do I want to append potentially millions of times to an
   // array. So I use this Array.from approach.
-  return {cols: wantedCols, rows: Array.from(Array(lines.length - 1), (_, i) => processRow(lines[i + 1], i + 1))};
+  return {
+    cols: wantedCols,
+    rows: Array.from(Array(lines.length - 1 - skipTop), (_, i) => processRow(lines[i + 1 + skipTop], i + 1 + skipTop))
+  };
+}
+
+const fixdate = (d: any) => `"${d.toISOString().split('T')[0]}"`;
+
+export function tosql(arr: Csv, table: string) {
+  console.log('-- ok!');
+  const cols = arr.cols.join(',');
+  for (let row of arr.rows) {
+    row = row.map(o => typeof o === 'string' ? '"' + o + '"' : typeof o === 'number' ? o : fixdate(o))
+    const vals = row.join(',');
+    const cmd = `insert into ${table} (${cols}) values (${vals});`;
+    console.log(cmd);
+  }
 }
