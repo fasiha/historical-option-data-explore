@@ -45,6 +45,10 @@
 -- 2020-03-30
 -- 2020-03-31
 -- select min(quotedate) from spy where expiration = date("2020-03-20"); -- 2018-03-19
+-- select quotedate,last from spy where expiration = date("2020-03-20") and strike=245 and type='put'; -- 2018-03-19
+
+-- select distinct expiration, min(quotedate) from spy group by expiration order by expiration;
+-- select distinct expiration, min(quotedate) from spy where strike=245 group by expiration order by expiration;
 
 select vix.quotedate, vix.last, spy.last, spy.expiration
 from vix
@@ -52,6 +56,23 @@ left join spy
 on (spy.quotedate = vix.quotedate) 
 and (spy.type="put" or spy.type is null)
 and (spy.strike=245 or spy.strike is null)
-and (spy.expiration=date("2021-12-17") or spy.expiration=date("2020-03-20") or spy.expiration is null)
-where vix.quotedate>=date("2018-09-01")
+and (spy.expiration in (
+  date("2018-12-31"),
+  date("2019-01-18"),
+  date("2019-03-15"),
+  date("2019-06-21"),
+  date("2019-09-20"),
+  date("2019-12-20"),
+  date("2020-01-17"),
+  date("2020-03-20"),
+  date("2020-06-19"),
+  date("2020-09-18"),
+  date("2020-12-18"),
+  date("2021-01-15"),
+  date("2021-03-19"),
+  date("2021-06-18"),
+  date("2021-09-17"),
+  date("2021-12-17")
+) or spy.expiration is null)
+where vix.quotedate>=date("2018-01-01")
 order by vix.quotedate, spy.expiration;

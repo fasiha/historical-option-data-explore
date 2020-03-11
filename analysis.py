@@ -1,9 +1,10 @@
+import numpy as np
 import pandas as pd
 df = pd.read_csv("vixcomp.csv", parse_dates=['date'])
 df.plot(x='date', y=['spy', 'vix'])
 
 import pylab as plt
-df2 = pd.read_csv("vixcomp2.csv", parse_dates=['date', 'exp'])
+df2 = pd.read_csv("vixcomp4.csv", parse_dates=['date', 'exp'])
 # df2.groupby('exp').apply(lambda df: df.plot(x='date', y=['spy', 'vix']))  # two plots
 foo = df2.groupby('exp').apply(lambda df: [df.date, df[['spy', 'vix']]])
 plt.figure()
@@ -29,11 +30,26 @@ for (key, df) in df2.groupby('exp'):
 plt.xlabel('diff vix')
 plt.ylabel('diff option')
 
+grouped = df2.groupby('exp')
+vixdf = pd.DataFrame([(k, v.iloc[0].vix) for k, v in df2.groupby('date')], columns=['date', 'vix'])
+
 plt.figure()
-for (key, df) in df2.groupby('exp'):
-  tmp = df[['spy', 'vix']].pct_change()
-  plt.plot(df.date, tmp.vix, 'k-', linewidth=0.5, label='vix')
-  plt.plot(df.date, tmp.spy, label=key)
+for idx, (key, df) in enumerate(grouped):
+  tmp = df[['spy']].pct_change()
+  if idx // 10 == 0:
+    plt.plot(df.date, tmp.spy, alpha=.75, linewidth=1, label=key)
+  else:
+    plt.plot(df.date, tmp.spy, '--', alpha=0.5, linewidth=2, label=key)
+plt.plot(vixdf.date, vixdf.vix.pct_change(), 'k-', linewidth=0.5, label='vix')
+plt.legend()
+
+plt.figure()
+for idx, (key, df) in enumerate(grouped):
+  if idx // 10 == 0:
+    plt.plot(df.date, df.spy, alpha=.75, linewidth=1, label=key)
+  else:
+    plt.plot(df.date, df.spy, '--', alpha=0.5, linewidth=2, label=key)
+plt.plot(vixdf.date, vixdf.vix, 'k-', linewidth=0.5, label='vix')
 plt.legend()
 
 plt.figure()
