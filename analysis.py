@@ -30,6 +30,8 @@ for (key, df) in df2.groupby('exp'):
 plt.xlabel('diff vix')
 plt.ylabel('diff option')
 
+printableDate = lambda x: x.__str__().split(' ')[0]
+
 grouped = df2.groupby('exp')
 vixdf = pd.DataFrame([(k, v.iloc[0].vix) for k, v in df2.groupby('date')], columns=['date', 'vix'])
 
@@ -37,18 +39,18 @@ plt.figure()
 for idx, (key, df) in enumerate(grouped):
   tmp = df[['spy']].pct_change()
   if idx // 10 == 0:
-    plt.plot(df.date, tmp.spy, alpha=.75, linewidth=1, label=key)
+    plt.plot(df.date, tmp.spy, alpha=.75, linewidth=1, label=printableDate(key))
   else:
-    plt.plot(df.date, tmp.spy, '--', alpha=0.5, linewidth=2, label=key)
+    plt.plot(df.date, tmp.spy, '--', alpha=0.5, linewidth=2, label=printableDate(key))
 plt.plot(vixdf.date, vixdf.vix.pct_change(), 'k-', linewidth=0.5, label='vix')
 plt.legend()
 
 plt.figure()
 for idx, (key, df) in enumerate(grouped):
   if idx // 10 == 0:
-    plt.plot(df.date, df.spy, alpha=.75, linewidth=1, label=key)
+    plt.plot(df.date, df.spy, alpha=.75, linewidth=1, label=printableDate(key))
   else:
-    plt.plot(df.date, df.spy, '--', alpha=0.5, linewidth=2, label=key)
+    plt.plot(df.date, df.spy, '--', alpha=0.5, linewidth=2, label=printableDate(key))
 plt.plot(vixdf.date, vixdf.vix, 'k-', linewidth=0.5, label='vix')
 plt.legend()
 
