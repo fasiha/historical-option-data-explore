@@ -21,11 +21,12 @@ CREATE TABLE IF NOT EXISTS spy(
   vega DOUBLE,
   optionalias TEXT,
   IVBid DOUBLE,
-  IVAsk DOUBLE
+  IVAsk DOUBLE,
+  PRIMARY KEY(underlying, quotedate, type, expiration, strike)
 );
 
 CREATE TABLE IF NOT EXISTS vix(
-  quotedate DATE, -- Date
+  quotedate DATE NOT NULL PRIMARY KEY, -- Date
   open DOUBLE, -- VIX Open
   high DOUBLE, -- VIX High
   low DOUBLE, -- VIX Low

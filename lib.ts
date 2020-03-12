@@ -84,7 +84,7 @@ export function tosql(arr: Csv, table: string) {
   for (let row of arr.rows) {
     row = row.map(o => typeof o === 'string' ? '"' + o + '"' : typeof o === 'number' ? o : fixdate(o))
     const vals = row.join(',');
-    const cmd = `insert into ${table} (${cols}) values (${vals});`;
+    const cmd = `insert or ignore into ${table} (${cols}) values (${vals});`;
     console.log(cmd);
   }
 }
