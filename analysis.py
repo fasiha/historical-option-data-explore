@@ -35,6 +35,7 @@ printableDate = lambda x: x.__str__().split(' ')[0]
 grouped = df2.groupby('exp')
 vixdf = pd.DataFrame([(k, v.iloc[0].vix) for k, v in df2.groupby('date')], columns=['date', 'vix'])
 
+# diff plot
 plt.figure()
 for idx, (key, df) in enumerate(grouped):
   tmp = df[['spy']].pct_change()
@@ -44,7 +45,7 @@ for idx, (key, df) in enumerate(grouped):
     plt.plot(df.date, tmp.spy, '--', alpha=0.5, linewidth=2, label=printableDate(key))
 plt.plot(vixdf.date, vixdf.vix.pct_change(), 'k-', linewidth=0.5, label='vix')
 plt.legend()
-
+# abs plot
 plt.figure()
 for idx, (key, df) in enumerate(grouped):
   if idx // 10 == 0:
@@ -52,6 +53,26 @@ for idx, (key, df) in enumerate(grouped):
   else:
     plt.plot(df.date, df.spy, '--', alpha=0.5, linewidth=2, label=printableDate(key))
 plt.plot(vixdf.date, vixdf.vix, 'k-', linewidth=0.5, label='vix')
+plt.legend()
+# abs with 1.0 start
+import dateutil
+startDate = dateutil.parser.parse('2018-09-01')
+plt.figure()
+for idx, (key, df) in enumerate(grouped):
+  startIdx = (df.date - startDate).abs().argmin()
+  if idx // 10 == 0:
+    plt.plot(
+        df.date, df.spy / df.iloc[startIdx].spy, alpha=.75, linewidth=1, label=printableDate(key))
+  else:
+    plt.plot(
+        df.date,
+        df.spy / df.iloc[startIdx].spy,
+        '--',
+        alpha=0.5,
+        linewidth=2,
+        label=printableDate(key))
+startIdx = (vixdf.date - startDate).abs().argmin()
+plt.plot(vixdf.date, vixdf.vix / vixdf.iloc[startIdx].vix, 'k-', linewidth=0.5, label='vix')
 plt.legend()
 
 plt.figure()

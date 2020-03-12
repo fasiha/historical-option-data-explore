@@ -25,10 +25,12 @@ CREATE TABLE IF NOT EXISTS spy(
   PRIMARY KEY(underlying, quotedate, type, expiration, strike)
 );
 
-CREATE TABLE IF NOT EXISTS vix(
-  quotedate DATE NOT NULL PRIMARY KEY, -- Date
-  open DOUBLE, -- VIX Open
-  high DOUBLE, -- VIX High
-  low DOUBLE, -- VIX Low
-  last DOUBLE -- VIX Close
+CREATE TABLE IF NOT EXISTS underlyings(
+  underlying TEXT NOT NULL,
+  quotedate DATE NOT NULL,
+  open DOUBLE,
+  high DOUBLE,
+  low DOUBLE,
+  last DOUBLE,
+  PRIMARY KEY(underlying, quotedate)
 );
