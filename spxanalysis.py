@@ -1,3 +1,5 @@
+import statsmodels.api as sm
+import seaborn as sns
 import dateutil
 import numpy as np
 import pandas as pd
@@ -19,7 +21,6 @@ makeroll = lambda n: spx['last'].rolling(n).apply(
 
 predWindow = 15
 
-import seaborn as sns
 reg = pd.DataFrame(
     np.array([makeroll(predWindow).shift(+1), makeroll(2)]).T, columns='x y'.split()).dropna()
 
@@ -77,7 +78,6 @@ for w in predWindows:
   spx['x' + str(w)] = makeroll(w).shift(futureWindow - 1)
 spx['y'] = makeroll(futureWindow)  # prediction: subsequent one year/day returns
 
-import statsmodels.api as sm
 # clip = spx[spx.x <= -20]
 clip = spx.dropna()
 model = sm.OLS(clip.y, sm.add_constant(clip[predColumns[:-1]]))
@@ -92,3 +92,15 @@ from mpl_toolkits.mplot3d import Axes3D
 fig = plt.figure()
 ax = fig.add_subplot(111, projection='3d')
 ax.scatter(spx.x, spx.x2, spx.y)
+
+from sklearn.linear_model import BayesianRidge
+reg = BayesianRidge(normalize=True, verbose=True)
+reg.fit(clip[predColumns[:-1]].values, clip.y.values)
+print(np.hstack((reg.coef_, reg.intercept_)) * 100)
+print(
+    reg.predict(
+        np.array([makeroll(win).iloc[-1] for win in predWindows])[np.newaxis, :], return_std=True))
+
+# from sklearn.linear_model import ARDRegression
+# clf = ARDRegression(compute_score=True)
+# clf.fit(clip[predColumns[:-1]].values, clip.y.values)
