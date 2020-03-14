@@ -49,38 +49,44 @@ plt.legend()
 plt.grid()
 plt.show()
 
-futureWindow = 5 * 52
+futureWindow = 2  # 2: final two-day window, i.e., one-day *change*
 
+predWindows = [2, 5, 15, 52 // 2 * 5, 52 * 5]
+predColumns = ['x{}'.format(x) for x in predWindows] + ['y']
 reg2 = pd.DataFrame(
-    np.array([
-        makeroll(predWindow).shift(futureWindow - 1),
-        makeroll(futureWindow),
-    ]).T,
-    columns='x  y'.split()).dropna()
-plt.figure()
-sns.regplot(x='x', y='y', data=reg2)
+    np.array([makeroll(win).shift(futureWindow - 1) for win in predWindows] +
+             [makeroll(futureWindow)]).T,
+    columns=predColumns).dropna()
 
-sns.regplot(x='x', y='y', data=reg2[reg2.x <= -15])
-sns.regplot(x='x', y='y', data=reg2[reg2.x <= -20])
-sns.regplot(x='x', y='y', data=reg2[reg2.x <= -25])
-sns.regplot(x='x', y='y', data=reg2[reg2.x <= -27])
-plt.xlabel('{}-session pct change'.format(predWindow))
-plt.ylabel('Subsequent one year pct change')
+plotPredictor = 'x15'
+assert (plotPredictor in predColumns)
+plt.figure()
+sns.regplot(x=plotPredictor, y='y', data=reg2)
+
+sns.regplot(x=plotPredictor, y='y', data=reg2[reg2[plotPredictor] <= -15])
+sns.regplot(x=plotPredictor, y='y', data=reg2[reg2[plotPredictor] <= -20])
+sns.regplot(x=plotPredictor, y='y', data=reg2[reg2[plotPredictor] <= -25])
+sns.regplot(x=plotPredictor, y='y', data=reg2[reg2[plotPredictor] <= -27])
+plt.xlabel('{}-session pct change'.format(plotPredictor[1:]))
+plt.ylabel('Subsequent {}-session pct change'.format(futureWindow - 1))
 plt.title('S&P 500, 1928–present (data: Yahoo Finance)')
 plt.grid()
 
-spx['x'] = makeroll(predWindow).shift(futureWindow -
-                                      1)  # first predictor: trailing fifteen day returns
-spx['x2'] = makeroll(52 // 2 * 5).shift(futureWindow -
-                                        1)  # next predictor: trailing six month returns
-spx['y'] = makeroll(futureWindow)  # prediction: subsequent one year returns
+# Predictors: trailing returns (we should add interest rates, day of week, proximity to holidays, etc.)
+for w in predWindows:
+  spx['x' + str(w)] = makeroll(w).shift(futureWindow - 1)
+spx['y'] = makeroll(futureWindow)  # prediction: subsequent one year/day returns
 
 import statsmodels.api as sm
-model = sm.OLS(reg2[reg2.x <= -20].y, sm.add_constant(reg2[reg2.x <= -20].x))
-print(model.fit().params)
+# clip = spx[spx.x <= -20]
+clip = spx.dropna()
+model = sm.OLS(clip.y, sm.add_constant(clip[predColumns[:-1]]))
+fit = model.fit()
+print(fit.summary())
+print(fit.params)
 
-clip = spx[spx.x <= -20]
-print(sm.OLS(clip.y, sm.add_constant(clip[['x', 'x2']])).fit().params)
+# Predict the future!!
+print(fit.predict([1.] + np.array([makeroll(win).iloc[-1] for win in predWindows]).tolist()))
 
 from mpl_toolkits.mplot3d import Axes3D
 fig = plt.figure()
