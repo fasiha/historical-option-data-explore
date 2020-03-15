@@ -104,3 +104,32 @@ print(
 # from sklearn.linear_model import ARDRegression
 # clf = ARDRegression(compute_score=True)
 # clf.fit(clip[predColumns[:-1]].values, clip.y.values)
+
+train = clip[predColumns].iloc[:-260]
+from sklearn import preprocessing
+from sklearn.model_selection import TimeSeriesSplit, cross_val_score
+scaler = preprocessing.StandardScaler().fit(train.values[:, :-1])
+tscv = TimeSeriesSplit(n_splits=6)
+regressor = BayesianRidge()
+scores = cross_val_score(
+    regressor, scaler.transform(train.iloc[:, :-1]), train.iloc[:, -1], cv=tscv)
+plt.figure()
+plt.plot(scores)
+
+spx['weekday'] = [x.isoweekday() for x in spx.date]
+
+weekdays = 'Mon,Tue,Wed,Thu,Fri'.split(',')
+plt.figure()
+[
+    sns.regplot(x='x15', y='y', data=spx[spx.weekday == w], label=l, scatter_kws={'alpha': 0.5})
+    for w, l in zip(range(1, 6), weekdays)
+]
+plt.legend()
+plt.grid()
+plt.xlabel('{}-session pct change'.format(plotPredictor[1:]))
+plt.ylabel('Subsequent {}-session pct change'.format(futureWindow - 1))
+plt.title('S&P 500, 1928–present (data: Yahoo Finance)')
+
+# f = sm.OLS(
+#     spx[spx.weekday == 1].y, sm.add_constant(spx[spx.weekday == 1].x15), missing='drop').fit()
+# print(f.params)
