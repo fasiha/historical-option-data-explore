@@ -208,16 +208,24 @@ datesDrops = [(fmtDate(spx.iloc[top, 0]), fmtDate(spx.iloc[bot, 0]),
 datesDrops = sorted(datesDrops, key=lambda x: x[0])
 
 plt.figure()
+ax1 = plt.subplot(211)
+ax2 = plt.subplot(212)
 for idx, (top, bottom) in enumerate(res):
-  pre = 5 * 4
-  tmp = spx['last'].iloc[(top - pre):(bottom + 1)]
+  if (idx <= 8):
+    ax = ax1
+  else:
+    ax = ax2
+  pre = (52 * 5) // 4
+  tmp = spx['last'].iloc[(top - pre):(bottom + 2)]
   tmpx = (np.arange(len(tmp)) - pre) / (52 * 5)
-  plt.plot(
+  p = pct(spx.loc[bottom, 'last'], spx.loc[top, 'last']) * 100
+  ax.plot(
       tmpx,
       tmp.values / tmp.loc[top],
-      label=fmtDate(spx.date.loc[top]),
-      linewidth=1 + (idx // 10),
+      label=fmtDate(spx.date.loc[top]) + ' {0:.0f}%'.format(p),
       alpha=0.75)
-plt.grid()
-plt.legend()
-plt.xlabel('years')
+for ax in [ax1, ax2]:
+  ax.grid('on')
+  ax.legend(fontsize='x-small')
+ax1.set_title('Tops-to-bottom drops of < -20% (data: Yahoo Finance)')
+ax2.set_xlabel('years (0=top)')
