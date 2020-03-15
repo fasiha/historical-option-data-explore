@@ -202,37 +202,37 @@ fmtDate = lambda d: d.isoformat().split('T')[0]
 
 def bullBearHelper(priceSeries, dateSeries, Nwin, minDrop):
   res = findTopsBottoms(priceSeries.values, Nwin, minDrop)
-  datesDrops = [(fmtDate(dateSeries.iloc[top]), fmtDate(dateSeries[bot]),
-                 pct(priceSeries.loc[bot], priceSeries[top]) * 100) for top, bot in res]
-  datesDrops = sorted(datesDrops, key=lambda x: x[0])
-  return datesDrops, res
+  res = sorted(res, key=lambda x: x[0])
+  return res
 
 
-bears10, res10 = bullBearHelper(spx['last'], spx['date'], 5 * 52 * 3, -0.1)
-bears20, res20 = bullBearHelper(spx['last'], spx['date'], 5 * 52 * 3, -0.2)
-
-pre = (52 * 5) // 4
-plt.figure()
-ax1 = plt.subplot(211)
-ax2 = plt.subplot(212, sharex=ax1, sharey=ax1)
-for idx, (top, bottom) in enumerate(res20):
-  if (idx <= 8):
-    ax = ax1
-  else:
-    ax = ax2
-  tmp = spx['last'].iloc[(top - pre):(bottom + 2)]
-  tmpx = (np.arange(len(tmp)) - pre) / ((52 * 5) / 12)
-  p = pct(spx.loc[bottom, 'last'], spx.loc[top, 'last']) * 100
-  ax.plot(
-      tmpx,
-      tmp.values / tmp.loc[top],
-      label='{}: {:.0f}%'.format(fmtDate(spx.date.loc[top]), p),
-      alpha=0.75)
-for ax in [ax1, ax2]:
+def bullBearPlotter(res,
+                    priceSeries,
+                    dateSeries,
+                    ax,
+                    pre=(52 * 5) // 4,
+                    post=1,
+                    elementsPerUnit=(52 * 5 / 12)):
+  for top, bottom in res:
+    topStr = fmtDate(dateSeries.iloc[top])
+    botStr = fmtDate(dateSeries[bottom])
+    drop = pct(priceSeries.loc[bottom], priceSeries[top]) * 100
+    tmp = priceSeries.iloc[(top - pre):(bottom + 1 + post)]
+    tmpx = (np.arange(len(tmp)) - pre) / elementsPerUnit
+    ax.plot(tmpx, tmp.values / tmp.loc[top], label='{}: {:.0f}%'.format(topStr, drop), alpha=0.75)
   ax.grid('on')
   ax.legend(fontsize='x-small')
   ax.set_ylabel('Close (top @ 1.0)')
-  # ax.set_xticks(np.arange(-3, ax.get_xlim()[1], 3))
+
+
+res10 = bullBearHelper(spx['last'], spx['date'], 5 * 52 * 3, -0.1)
+res20 = bullBearHelper(spx['last'], spx['date'], 5 * 52 * 3, -0.2)
+
+plt.figure()
+ax1 = plt.subplot(211)
+ax2 = plt.subplot(212, sharex=ax1, sharey=ax1)
+bullBearPlotter(res20[:9], spx['last'], spx['date'], ax1)
+bullBearPlotter(res20[9:], spx['last'], spx['date'], ax2)
 ax1.set_title('S&P500 drawdowns exceeding -20% (data: Yahoo Finance)')
 ax2.set_xlabel('months after bull market top')
 
@@ -251,3 +251,16 @@ realax.yaxis.set_ticks_position('both')
 realax.xaxis.set_ticks_position('both')
 import matplotlib.ticker as ticker
 realax.yaxis.set_major_formatter(ticker.FormatStrFormatter('$%d'))
+
+nominal20raw = bullBearHelper(shiller['price'], shiller['date'], 12 * 3, -0.2)
+
+plt.figure()
+ax1 = plt.subplot(311)
+ax2 = plt.subplot(312, sharex=ax1, sharey=ax1)
+ax3 = plt.subplot(313, sharex=ax1, sharey=ax1)
+
+bullBearPlotter(nominal20raw[:9], shiller['price'], shiller['date'], ax1, 3, 1, 1)
+bullBearPlotter(res20[:9], spx['last'], spx['date'], ax2)
+bullBearPlotter(res20[9:], spx['last'], spx['date'], ax3)
+ax1.set_title('S&P500 drawdowns exceeding -20% (data: Robert Shiller; Yahoo Finance)')
+ax3.set_xlabel('months after bull market top')
