@@ -213,16 +213,19 @@ def bullBearPlotter(res,
                     pre=(52 * 5) // 4,
                     post=1,
                     elementsPerUnit=(52 * 5 / 12)):
+  table = []
   for top, bottom in res:
     topStr = fmtDate(dateSeries.iloc[top])
     botStr = fmtDate(dateSeries[bottom])
     drop = pct(priceSeries.loc[bottom], priceSeries[top]) * 100
+    table.append((topStr, botStr, drop))
     tmp = priceSeries.iloc[(top - pre):(bottom + 1 + post)]
     tmpx = (np.arange(len(tmp)) - pre) / elementsPerUnit
     ax.plot(tmpx, tmp.values / tmp.loc[top], label='{}: {:.0f}%'.format(topStr, drop), alpha=0.75)
   ax.grid('on')
   ax.legend(fontsize='x-small')
   ax.set_ylabel('Close (top @ 1.0)')
+  return table
 
 
 res10 = bullBearHelper(spx['last'], spx['date'], 5 * 52 * 3, -0.1)
@@ -259,9 +262,9 @@ ax1 = plt.subplot(311)
 ax2 = plt.subplot(312, sharex=ax1, sharey=ax1)
 ax3 = plt.subplot(313, sharex=ax1, sharey=ax1)
 
-bullBearPlotter(nominal20raw[:9], shiller['price'], shiller['date'], ax1, 3, 1, 1)
-bullBearPlotter(res20[:9], spx['last'], spx['date'], ax2)
-bullBearPlotter(res20[9:], spx['last'], spx['date'], ax3)
+shillerTable = bullBearPlotter(nominal20raw[:9], shiller['price'], shiller['date'], ax1, 3, 1, 1)
+yahooTable1 = bullBearPlotter(res20[:9], spx['last'], spx['date'], ax2)
+yahooTable2 = bullBearPlotter(res20[9:], spx['last'], spx['date'], ax3)
 ax1.set_title('S&P500 drawdowns exceeding -20% (data: Robert Shiller; Yahoo Finance)')
 ax3.set_xlabel('months after bull market top')
 
@@ -272,6 +275,6 @@ ax2 = plt.subplot(312, sharex=ax1, sharey=ax1)
 ax3 = plt.subplot(313, sharex=ax1, sharey=ax1)
 bullBearPlotter(real20raw[:9], shiller['realPrice'], shiller['date'], ax1, 3, 1, 1)
 bullBearPlotter(real20raw[9:18], shiller['realPrice'], shiller['date'], ax2, 3, 1, 1)
-bullBearPlotter(real20raw[18:], shiller['realPrice'], shiller['date'], ax1, 3, 1, 1)
+bullBearPlotter(real20raw[18:], shiller['realPrice'], shiller['date'], ax3, 3, 1, 1)
 # bullBearPlotter(res20[:9], spx['last'], spx['date'], ax2)
 # bullBearPlotter(res20[9:], spx['last'], spx['date'], ax3)
