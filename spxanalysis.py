@@ -198,21 +198,24 @@ def findTopsBottoms(x, Nwin, minDrop, _sofar=None, _xStartIdx=0):
 
 
 fmtDate = lambda d: d.isoformat().split('T')[0]
-datesDrops = [(fmtDate(spx.iloc[top, 0]), fmtDate(spx.iloc[bot, 0]), spx.loc[top, 'last'],
-               pct(spx.loc[bot, 'last'], spx.loc[top, 'last']) * 100)
-              for top, bot in findTopsBottoms(spx['last'].values, 5 * 52 * 3, -0.1)]
-datesDrops = sorted(datesDrops, key=lambda x: x[0])
 
-res = findTopsBottoms(spx['last'].values, 5 * 52 * 3, -0.2)
-datesDrops = [(fmtDate(spx.iloc[top, 0]), fmtDate(spx.iloc[bot, 0]),
-               pct(spx.loc[bot, 'last'], spx.loc[top, 'last']) * 100) for top, bot in res]
-datesDrops = sorted(datesDrops, key=lambda x: x[0])
+
+def bullBearHelper(priceSeries, dateSeries, Nwin, minDrop):
+  res = findTopsBottoms(priceSeries.values, Nwin, minDrop)
+  datesDrops = [(fmtDate(dateSeries.iloc[top]), fmtDate(dateSeries[bot]),
+                 pct(priceSeries.loc[bot], priceSeries[top]) * 100) for top, bot in res]
+  datesDrops = sorted(datesDrops, key=lambda x: x[0])
+  return datesDrops, res
+
+
+bears10, res10 = bullBearHelper(spx['last'], spx['date'], 5 * 52 * 3, -0.1)
+bears20, res20 = bullBearHelper(spx['last'], spx['date'], 5 * 52 * 3, -0.2)
 
 pre = (52 * 5) // 4
 plt.figure()
 ax1 = plt.subplot(211)
 ax2 = plt.subplot(212, sharex=ax1, sharey=ax1)
-for idx, (top, bottom) in enumerate(res):
+for idx, (top, bottom) in enumerate(res20):
   if (idx <= 8):
     ax = ax1
   else:
@@ -242,3 +245,9 @@ shiller['date'] = [
 realax = shiller.plot(
     x='date', y='realPrice', logy=True, label='real (CPI-adjusted) price', linewidth=2.5)
 shiller.plot(x='date', y='price', logy=True, ax=realax, grid=True, label='nominal price')
+realax.set_title('S&P500: real and nominal price (data: Robert Shiller)')
+realax.set_ylabel('price (US dollars)')
+realax.yaxis.set_ticks_position('both')
+realax.xaxis.set_ticks_position('both')
+import matplotlib.ticker as ticker
+realax.yaxis.set_major_formatter(ticker.FormatStrFormatter('$%d'))
