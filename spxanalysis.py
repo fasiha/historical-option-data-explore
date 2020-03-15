@@ -89,10 +89,10 @@ print(fit.params)
 # Predict the future!!
 print(fit.predict([1.] + np.array([makeroll(win).iloc[-1] for win in predWindows]).tolist()))
 
-from mpl_toolkits.mplot3d import Axes3D
-fig = plt.figure()
-ax = fig.add_subplot(111, projection='3d')
-ax.scatter(spx.x, spx.x2, spx.y)
+# from mpl_toolkits.mplot3d import Axes3D
+# fig = plt.figure()
+# ax = fig.add_subplot(111, projection='3d')
+# ax.scatter(spx.x, spx.x2, spx.y)
 
 from sklearn.linear_model import BayesianRidge
 reg = BayesianRidge(normalize=True, verbose=True)
@@ -105,6 +105,12 @@ print(
 # from sklearn.linear_model import ARDRegression
 # clf = ARDRegression(compute_score=True)
 # clf.fit(clip[predColumns[:-1]].values, clip.y.values)
+
+import sklearn.gaussian_process as gp
+kernel = gp.kernels.ConstantKernel(1.0, (1e-1, 1e3)) * gp.kernels.RBF(
+    10.0, (1e-3, 1e3)) + gp.kernels.WhiteKernel(1)
+gpr = gp.GaussianProcessRegressor(kernel=kernel)
+gpr.fit(clip[predColumns[:-1]].values, clip.y.values)
 
 train = clip[predColumns].iloc[:-260]
 from sklearn import preprocessing
@@ -276,5 +282,3 @@ ax3 = plt.subplot(313, sharex=ax1, sharey=ax1)
 bullBearPlotter(real20raw[:9], shiller['realPrice'], shiller['date'], ax1, 3, 1, 1)
 bullBearPlotter(real20raw[9:18], shiller['realPrice'], shiller['date'], ax2, 3, 1, 1)
 bullBearPlotter(real20raw[18:], shiller['realPrice'], shiller['date'], ax3, 3, 1, 1)
-# bullBearPlotter(res20[:9], spx['last'], spx['date'], ax2)
-# bullBearPlotter(res20[9:], spx['last'], spx['date'], ax3)
