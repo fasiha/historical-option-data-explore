@@ -133,3 +133,91 @@ plt.title('S&P 500, 1928–present (data: Yahoo Finance)')
 # f = sm.OLS(
 #     spx[spx.weekday == 1].y, sm.add_constant(spx[spx.weekday == 1].x15), missing='drop').fit()
 # print(f.params)
+
+
+def pct(new, old):
+  "Percent change between new and old"
+  return (new - old) / old
+
+
+def findTopBottom(x, Nwin, minDrop, argmax=None):
+  """Tries to find a top and bottom in a vector
+
+  Returns a tuple of two indexes of `x` such that
+  1. the two indexes are within `Nwin` apart and
+  2. the percent change between them (in fractional percent) is at least `minDrop`.
+
+  If no such indexes can be found, returns None.
+  """
+  argmax = x.argmax() if argmax is None else argmax
+  argmin = x[argmax:(argmax + Nwin)].argmin() + argmax
+  if pct(x[argmin], x[argmax]) <= minDrop:
+    return (argmax, argmin)
+  return None
+
+
+def findTopsBottoms(x, Nwin, minDrop, _sofar=None, _xStartIdx=0):
+  """Finds all tops and bottoms in a vector.
+
+  A top and bottom pair are defined as less than `Nwin` elements apart and with a fractional percent
+  change of less than `minDrop`.
+
+  Return tuple of indexes is unsorted.
+  """
+  assert (minDrop < 0)
+  assert (Nwin > 0)
+  _sofar = [] if _sofar is None else _sofar
+
+  # Recursive function has to have an escape hatch.
+  if len(x) < 2:
+    return _sofar
+
+  # Find the max. If there's room before this, search for tops/bottoms to the left. Move one index
+  # to make sure we don't miss anything.
+  argmax = x.argmax()
+  if argmax >= 2:
+    findTopsBottoms(x[:argmax], Nwin, minDrop, _sofar, _xStartIdx)
+
+  # See if this max is a top, i.e., if there's a bottom to the right of the max that meets the
+  # requirements.
+  res = findTopBottom(x, Nwin, minDrop, argmax)
+  if res:
+    # yes, this max is a top, we have a top and bottom. Keep track of it (in global coordinates, not
+    # the piece `x` we received)
+    argmax, argmin = res
+    _sofar.append((argmax + _xStartIdx, argmin + _xStartIdx))
+    newStart = argmin
+  else:
+    # no, couldn't find a bottom: `x` never dropped below the threshold soon enough
+    newStart = argmax
+  # In either case, search for tops/bottoms to the right of the max. Move just one index to make
+  # sure we don't miss anything
+  findTopsBottoms(x[newStart + 1:], Nwin, minDrop, _sofar, newStart + 1 + _xStartIdx)
+  return _sofar
+
+
+fmtDate = lambda d: d.isoformat().split('T')[0]
+datesDrops = [(fmtDate(spx.iloc[top, 0]), fmtDate(spx.iloc[bot, 0]), spx.loc[top, 'last'],
+               pct(spx.loc[bot, 'last'], spx.loc[top, 'last']) * 100)
+              for top, bot in findTopsBottoms(spx['last'].values, 5 * 52 * 3, -0.1)]
+datesDrops = sorted(datesDrops, key=lambda x: x[0])
+
+res = findTopsBottoms(spx['last'].values, 5 * 52 * 3, -0.2)
+datesDrops = [(fmtDate(spx.iloc[top, 0]), fmtDate(spx.iloc[bot, 0]),
+               pct(spx.loc[bot, 'last'], spx.loc[top, 'last']) * 100) for top, bot in res]
+datesDrops = sorted(datesDrops, key=lambda x: x[0])
+
+plt.figure()
+for idx, (top, bottom) in enumerate(res):
+  pre = 5 * 4
+  tmp = spx['last'].iloc[(top - pre):(bottom + 1)]
+  tmpx = (np.arange(len(tmp)) - pre) / (52 * 5)
+  plt.plot(
+      tmpx,
+      tmp.values / tmp.loc[top],
+      label=fmtDate(spx.date.loc[top]),
+      linewidth=1 + (idx // 10),
+      alpha=0.75)
+plt.grid()
+plt.legend()
+plt.xlabel('years')
