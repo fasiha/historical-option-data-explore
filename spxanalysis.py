@@ -1,3 +1,4 @@
+import dateutil
 import statsmodels.api as sm
 import seaborn as sns
 import dateutil
@@ -207,25 +208,37 @@ datesDrops = [(fmtDate(spx.iloc[top, 0]), fmtDate(spx.iloc[bot, 0]),
                pct(spx.loc[bot, 'last'], spx.loc[top, 'last']) * 100) for top, bot in res]
 datesDrops = sorted(datesDrops, key=lambda x: x[0])
 
+pre = (52 * 5) // 4
 plt.figure()
 ax1 = plt.subplot(211)
-ax2 = plt.subplot(212)
+ax2 = plt.subplot(212, sharex=ax1, sharey=ax1)
 for idx, (top, bottom) in enumerate(res):
   if (idx <= 8):
     ax = ax1
   else:
     ax = ax2
-  pre = (52 * 5) // 4
   tmp = spx['last'].iloc[(top - pre):(bottom + 2)]
-  tmpx = (np.arange(len(tmp)) - pre) / (52 * 5)
+  tmpx = (np.arange(len(tmp)) - pre) / ((52 * 5) / 12)
   p = pct(spx.loc[bottom, 'last'], spx.loc[top, 'last']) * 100
   ax.plot(
       tmpx,
       tmp.values / tmp.loc[top],
-      label=fmtDate(spx.date.loc[top]) + ' {0:.0f}%'.format(p),
+      label='{}: {:.0f}%'.format(fmtDate(spx.date.loc[top]), p),
       alpha=0.75)
 for ax in [ax1, ax2]:
   ax.grid('on')
   ax.legend(fontsize='x-small')
-ax1.set_title('Tops-to-bottom drops of < -20% (data: Yahoo Finance)')
-ax2.set_xlabel('years (0=top)')
+  ax.set_ylabel('Close (top @ 1.0)')
+  # ax.set_xticks(np.arange(-3, ax.get_xlim()[1], 3))
+ax1.set_title('S&P500 drawdowns exceeding -20% (data: Yahoo Finance)')
+ax2.set_xlabel('months after bull market top')
+
+with open('ie_data.xls.json', 'r') as fid:
+  import json
+  shiller = pd.DataFrame(json.load(fid))
+shiller['date'] = [
+    dateutil.parser.parse('{}-{:02}-01'.format(int(x[0]), int(x[1]))) for x in shiller.values
+]
+realax = shiller.plot(
+    x='date', y='realPrice', logy=True, label='real (CPI-adjusted) price', linewidth=2.5)
+shiller.plot(x='date', y='price', logy=True, ax=realax, grid=True, label='nominal price')
