@@ -21,7 +21,18 @@ makeroll = lambda n: spx['last'].rolling(n).apply(
     lambda df: (df[-1] - df[0]) / df[0], raw=True) * 100
 
 predWindow = 15
+futureWindow = 2  # 2: final two-day window, i.e., one-day *change*
 
+predWindows = [2, 5, 15, 52 // 2 * 5, 52 * 5]
+predColumns = ['x{}'.format(x) for x in predWindows] + ['y']
+# Predictors: trailing returns (we should add interest rates, day of week, proximity to holidays, etc.)
+for w in predWindows:
+  spx['x' + str(w)] = makeroll(w).shift(futureWindow - 1)
+spx['y'] = makeroll(futureWindow)  # prediction: subsequent one year/day returns
+
+clip = spx.dropna()
+
+## Plots
 reg = pd.DataFrame(
     np.array([makeroll(predWindow).shift(+1), makeroll(2)]).T, columns='x y'.split()).dropna()
 
@@ -51,10 +62,6 @@ plt.legend()
 plt.grid()
 plt.show()
 
-futureWindow = 2  # 2: final two-day window, i.e., one-day *change*
-
-predWindows = [2, 5, 15, 52 // 2 * 5, 52 * 5]
-predColumns = ['x{}'.format(x) for x in predWindows] + ['y']
 reg2 = pd.DataFrame(
     np.array([makeroll(win).shift(futureWindow - 1) for win in predWindows] +
              [makeroll(futureWindow)]).T,
@@ -74,13 +81,6 @@ plt.ylabel('Subsequent {}-session pct change'.format(futureWindow - 1))
 plt.title('S&P 500, 1928–present (data: Yahoo Finance)')
 plt.grid()
 
-# Predictors: trailing returns (we should add interest rates, day of week, proximity to holidays, etc.)
-for w in predWindows:
-  spx['x' + str(w)] = makeroll(w).shift(futureWindow - 1)
-spx['y'] = makeroll(futureWindow)  # prediction: subsequent one year/day returns
-
-# clip = spx[spx.x <= -20]
-clip = spx.dropna()
 model = sm.OLS(clip.y, sm.add_constant(clip[predColumns[:-1]]))
 fit = model.fit()
 print(fit.summary())
@@ -106,15 +106,44 @@ print(
 # clf = ARDRegression(compute_score=True)
 # clf.fit(clip[predColumns[:-1]].values, clip.y.values)
 
+from sklearn import preprocessing
 import sklearn.gaussian_process as gp
 kernel = gp.kernels.ConstantKernel(1.0, (1e-1, 1e3)) * gp.kernels.RBF(
     10.0, (1e-3, 1e3)) + gp.kernels.WhiteKernel(1)
 gpr = gp.GaussianProcessRegressor(kernel=kernel)
-gpr.fit(clip[predColumns[:-1]].values, clip.y.values)
 
-train = clip[predColumns].iloc[:-260]
-from sklearn import preprocessing
+Nsamples = 5000
+scaler = preprocessing.StandardScaler().fit(clip[predColumns[:-1]].values)
+gpr.fit(scaler.transform(clip[predColumns[:-1]].values[-Nsamples:]), clip.y.values[-Nsamples:])
+# predict the future
+gpr.predict(
+    scaler.transform(np.array([makeroll(win).iloc[-1] for win in predWindows])[np.newaxis, :]),
+    return_std=True)
+
+# predict the past
+pastPred = gpr.predict(scaler.transform(clip[predColumns[:-1]].values), return_std=True)
+plt.figure()
+plt.errorbar(clip.date, pastPred[0], yerr=pastPred[1], label='pred')
+plt.plot(clip.date, clip.y, 'o', alpha=0.5, label='actual', linewidth=2)
+plt.grid()
+plt.legend()
+# interestingly, while stdev does vary between 0 and 2~, in out-of-training, it does spike.
+# Does this mean it hasn't seen that particular sample before?
+
 from sklearn.model_selection import TimeSeriesSplit, cross_val_score
+Nsamplesend = 60
+gpr = gp.GaussianProcessRegressor(kernel=kernel)
+tscv = TimeSeriesSplit(n_splits=60)
+scores = cross_val_score(
+    gpr,
+    scaler.transform(clip[predColumns[:-1]].values[-Nsamples:-Nsamplesend]),
+    clip.y.values[-Nsamples:-Nsamplesend],
+    cv=tscv)
+plt.figure()
+plt.plot(scores)
+
+# Ridge regression
+train = clip[predColumns].iloc[:-260]
 scaler = preprocessing.StandardScaler().fit(train.values[:, :-1])
 tscv = TimeSeriesSplit(n_splits=6)
 regressor = BayesianRidge()
@@ -123,6 +152,7 @@ scores = cross_val_score(
 plt.figure()
 plt.plot(scores)
 
+# Day of week
 spx['weekday'] = [x.isoweekday() for x in spx.date]
 
 weekdays = 'Mon,Tue,Wed,Thu,Fri'.split(',')
