@@ -20,19 +20,30 @@ spx = pd.DataFrame([(dateutil.parser.parse(a), b, c) for a, b, c in spx],
 makeroll = lambda n: spx['last'].rolling(n).apply(
     lambda df: (df[-1] - df[0]) / df[0], raw=True) * 100
 
-predWindow = 15
+
+def makePredictorDataframe(spx, predWindows, futureWindow):
+  clip = spx.copy()
+  predColumns = ['x{}'.format(x) for x in predWindows] + ['y']
+  # Predictors: trailing returns (we should add interest rates, day of week, proximity to holidays, etc.)
+  for w in predWindows:
+    clip['x' + str(w)] = makeroll(w).shift(futureWindow - 1)
+  clip['y'] = makeroll(futureWindow)  # prediction: subsequent one year/day returns etc.
+
+  clip = clip.dropna()
+  return clip, predColumns
+
+
+def pct(new, old):
+  "Percent change between new and old"
+  return (new - old) / old
+
+
 futureWindow = 2  # 2: final two-day window, i.e., one-day *change*
-
 predWindows = [2, 5, 15, 52 // 2 * 5, 52 * 5]
-predColumns = ['x{}'.format(x) for x in predWindows] + ['y']
-# Predictors: trailing returns (we should add interest rates, day of week, proximity to holidays, etc.)
-for w in predWindows:
-  spx['x' + str(w)] = makeroll(w).shift(futureWindow - 1)
-spx['y'] = makeroll(futureWindow)  # prediction: subsequent one year/day returns
-
-clip = spx.dropna()
+clip, predColumns = makePredictorDataframe(spx, predWindows, futureWindow)
 
 ## Plots
+predWindow = 15
 reg = pd.DataFrame(
     np.array([makeroll(predWindow).shift(+1), makeroll(2)]).T, columns='x y'.split()).dropna()
 
@@ -108,20 +119,25 @@ print(
 
 from sklearn import preprocessing
 import sklearn.gaussian_process as gp
+
+
+def fitGp(clip, scaler, kernel, predColumns, Nsamples):
+  gpr = gp.GaussianProcessRegressor(kernel=kernel)
+  gpr.fit(scaler.transform(clip[predColumns[:-1]].values[-Nsamples:]), clip.y.values[-Nsamples:])
+  pred = gpr.predict(
+      scaler.transform(np.array([makeroll(win).iloc[-1] for win in predWindows])[np.newaxis, :]),
+      return_std=True)
+  pastPred = gpr.predict(scaler.transform(clip[predColumns[:-1]].values), return_std=True)
+  return gpr, pred, pastPred
+
+
+scaler = preprocessing.StandardScaler().fit(clip[predColumns[:-1]].values)
 kernel = gp.kernels.ConstantKernel(1.0, (1e-1, 1e3)) * gp.kernels.RBF(
     10.0, (1e-3, 1e3)) + gp.kernels.WhiteKernel(1)
-gpr = gp.GaussianProcessRegressor(kernel=kernel)
+gpSimple = fitGp(clip, scaler, kernel, predColumns, 5000)
 
-Nsamples = 5000
-scaler = preprocessing.StandardScaler().fit(clip[predColumns[:-1]].values)
-gpr.fit(scaler.transform(clip[predColumns[:-1]].values[-Nsamples:]), clip.y.values[-Nsamples:])
-# predict the future
-gpr.predict(
-    scaler.transform(np.array([makeroll(win).iloc[-1] for win in predWindows])[np.newaxis, :]),
-    return_std=True)
-
-# predict the past
-pastPred = gpr.predict(scaler.transform(clip[predColumns[:-1]].values), return_std=True)
+# show the past
+pastPred = gpSimple[2]
 plt.figure()
 plt.errorbar(clip.date, pastPred[0], yerr=pastPred[1], label='pred')
 plt.plot(clip.date, clip.y, 'o', alpha=0.5, label='actual', linewidth=2)
@@ -129,6 +145,34 @@ plt.grid()
 plt.legend()
 # interestingly, while stdev does vary between 0 and 2~, in out-of-training, it does spike.
 # Does this mean it hasn't seen that particular sample before?
+plt.figure()
+plt.plot(clip.date, pastPred[1])
+
+# Try more complex kernels.
+
+k1 = gp.kernels.ConstantKernel(10) * gp.kernels.RBF(10.0)
+# k2 = gp.kernels.ConstantKernel(.1) * gp.kernels.RBF() * gp.kernels.ExpSineSquared()
+k3 = gp.kernels.ConstantKernel(.1) * gp.kernels.RBF() * gp.kernels.RationalQuadratic()
+kernel2 = k1 + k3 + gp.kernels.WhiteKernel(1)
+
+# But really what I think will be needed is to reparameterize the data. Don't just fit next day's actual move.
+# Fit next day or next week's log-absolute move (Mandelbrot?).
+clip5, predColumns5 = makePredictorDataframe(spx, predWindows, 5)
+logret = clip5.copy()
+logret = logret[np.isfinite(np.log10(np.abs(logret.y)))]
+logret.y = np.log10(np.abs(logret.y))
+gpLogret = fitGp(logret, scaler, kernel, predColumns, 5000)
+pastPred = gpLogret[2]
+plt.figure()
+plt.errorbar(logret.date, pastPred[0], yerr=pastPred[1], label='pred')
+plt.plot(logret.date, logret.y, 'o', alpha=0.5, label='actual', linewidth=2)
+plt.grid()
+plt.legend()
+plt.figure()
+plt.plot(logret.date, pastPred[1])
+pred2 = gpLogret[0].predict(
+    scaler.transform(np.array([makeroll(win).iloc[-1:] for win in predWindows])), return_std=True)
+# stdev spikes up on 22Oct1987 and really on 23oct1987, when the crash was 19oct1987... It is out of sample though.
 
 from sklearn.model_selection import TimeSeriesSplit, cross_val_score
 Nsamplesend = 60
@@ -170,11 +214,6 @@ plt.title('S&P 500, 1928–present (data: Yahoo Finance)')
 # f = sm.OLS(
 #     spx[spx.weekday == 1].y, sm.add_constant(spx[spx.weekday == 1].x15), missing='drop').fit()
 # print(f.params)
-
-
-def pct(new, old):
-  "Percent change between new and old"
-  return (new - old) / old
 
 
 def findTopBottom(x, Nwin, minDrop, argmax=None):
