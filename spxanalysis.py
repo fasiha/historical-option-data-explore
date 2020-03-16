@@ -19,6 +19,8 @@ spx = pd.DataFrame([(dateutil.parser.parse(a), b, c) for a, b, c in spx],
 
 makeroll = lambda n: spx['last'].rolling(n).apply(
     lambda df: (df[-1] - df[0]) / df[0], raw=True) * 100
+rollworst = lambda n: spx['last'].rolling(n).apply(
+    lambda df: np.min((df[1:] - df[0]) / df[0]), raw=True) * 100
 
 
 def makePredictorDataframe(spx, predWindows, futureWindow):
@@ -33,6 +35,20 @@ def makePredictorDataframe(spx, predWindows, futureWindow):
   return clip, predColumns
 
 
+def makePredictorDataframeMaxLoss(spx, predWindows, futureWindow):
+  clip = spx.copy()
+  predColumns = ['x{}'.format(x) for x in predWindows] + ['y']
+  for w in predWindows:
+    clip['x' + str(w)] = makeroll(w).shift(futureWindow - 1)
+  clip['y'] = rollworst(futureWindow)
+  # Also add the open on the first day into the future for analysis the night before
+  clip['xOvernight'] = pct(clip['open'].rolling(futureWindow).apply(
+      lambda df: df[1], raw=True), clip['last'].rolling(futureWindow).apply(
+          lambda df: df[0], raw=True)) * 100
+  clip = clip.dropna()
+  return clip, predColumns, [makeroll(w).iloc[-futureWindow:] for w in predWindows]
+
+
 def pct(new, old):
   "Percent change between new and old"
   return (new - old) / old
@@ -41,6 +57,39 @@ def pct(new, old):
 futureWindow = 2  # 2: final two-day window, i.e., one-day *change*
 predWindows = [2, 5, 15, 52 // 2 * 5, 52 * 5]
 clip, predColumns = makePredictorDataframe(spx, predWindows, futureWindow)
+
+# Plotting the worst loss over a period (for potential put strategy)
+worstClip = makePredictorDataframeMaxLoss(spx, [15, 17, 19], 6)
+worstClip[0]['year'] = [x.year for x in worstClip[0].date]
+plt.style.use('dark_background')
+plt.figure()
+axs = [plt.subplot(311)]
+axs = axs + [
+    plt.subplot(312, sharex=axs[0], sharey=axs[0]),
+    plt.subplot(313, sharex=axs[0], sharey=axs[0])
+]
+for ax, x in zip(axs, worstClip[1][:-1]):
+  worstClip[0].plot.scatter(
+      x=x, y='y', ax=ax, c='year', cmap='viridis', alpha=0.95, grid=True, s=30)
+# Not sure why y-ticks are lost
+shax1 = worstClip[0].plot.scatter(
+    x=worstClip[1][-2], y='y', c='year', cmap='viridis', alpha=0.95, grid=True, s=40)
+plt.ylabel('lowest next 5-session drop')
+plt.xlabel('trailing 19-session pct return')
+shax2 = worstClip[0].plot.scatter(
+    x=worstClip[1][-2],
+    y='y',
+    c='xOvernight',
+    cmap='viridis',
+    alpha=0.95,
+    grid=True,
+    s=40,
+    sharex=shax,
+    sharey=shax)
+plt.ylabel('lowest next 5-session drop')
+plt.xlabel('trailing 19-session pct return')
+shax1.get_shared_x_axes().join(shax1, shax2)
+shax1.get_shared_y_axes().join(shax1, shax2)
 
 ## Plots
 predWindow = 15
