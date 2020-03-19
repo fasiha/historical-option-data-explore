@@ -11,19 +11,27 @@ plt.style.use('dark_background')
 
 conn = sql.connect('spy.sqlite3')
 cursor = conn.cursor()
-cursor.execute('''select quotedate, last, open from underlyings
+cursor.execute('''select quotedate, last, open, low, high from underlyings
 where underlying="SPX"
 ''')
 spx = cursor.fetchall()
-spx = pd.DataFrame([(dateutil.parser.parse(a), b, c) for a, b, c in spx],
-                   columns=['date', 'last', 'open'])
+spx = pd.DataFrame([[dateutil.parser.parse(l[0])] + list(l[1:]) for l in spx],
+                   columns=['date', 'last', 'open', 'low', 'high'])
 
 makeroll = lambda n: spx['last'].rolling(n).apply(
     lambda df: (df[-1] - df[0]) / df[0], raw=True) * 100
-rollworst = lambda n: spx['last'].rolling(n).apply(
-    lambda df: np.min((df[1:] - df[0]) / df[0]), raw=True) * 100
-rollbest = lambda n: spx['last'].rolling(n).apply(
-    lambda df: np.max((df[1:] - df[0]) / df[0]), raw=True) * 100
+
+
+def rollworst(n):
+  todayClose = spx['last'].rolling(n).apply(lambda df: df[0], raw=True)
+  minLow = spx['low'].rolling(n - 1).min()
+  return (minLow - todayClose) / todayClose * 100
+
+
+def rollbest(n):
+  todayClose = spx['last'].rolling(n).apply(lambda df: df[0], raw=True)
+  maxHigh = spx['high'].rolling(n - 1).max()
+  return (maxHigh - todayClose) / todayClose * 100
 
 
 def makePredictorDataframe(spx, predWindows, futureWindow):
@@ -59,8 +67,8 @@ def pct(new, old):
 
 
 # Plotting the worst loss over a period (for potential put strategy)
-predWindows = [10, 15, 20]
-futureWindow = 4
+predWindows = [21]
+futureWindow = 3
 worstdf, predcols, current = makePredictorDataframeMaxLoss(spx, predWindows, futureWindow,
                                                            rollworst)
 bestdf, _, _ = makePredictorDataframeMaxLoss(spx, predWindows, futureWindow, rollbest)
@@ -74,6 +82,8 @@ def align(shax1, shax2, low=True):
   shax2.set_xlabel('trailing {}-session pct return'.format(predWindows[-1]))
   shax1.get_shared_x_axes().join(shax1, shax2)
   shax1.get_shared_y_axes().join(shax1, shax2)
+  shax1.set_title('S&P 500 trailing vs. forward returns, 1928–present (Yahoo Finance)')
+  shax2.set_title('S&P 500 trailing vs. forward returns, 1928–present (Yahoo Finance)')
 
 
 shax1 = worstdf.plot.scatter(
