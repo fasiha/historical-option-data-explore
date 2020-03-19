@@ -7,6 +7,7 @@ import pandas as pd
 import pylab as plt
 import sqlite3 as sql
 plt.ion()
+plt.style.use('dark_background')
 
 conn = sql.connect('spy.sqlite3')
 cursor = conn.cursor()
@@ -21,6 +22,8 @@ makeroll = lambda n: spx['last'].rolling(n).apply(
     lambda df: (df[-1] - df[0]) / df[0], raw=True) * 100
 rollworst = lambda n: spx['last'].rolling(n).apply(
     lambda df: np.min((df[1:] - df[0]) / df[0]), raw=True) * 100
+rollbest = lambda n: spx['last'].rolling(n).apply(
+    lambda df: np.max((df[1:] - df[0]) / df[0]), raw=True) * 100
 
 
 def makePredictorDataframe(spx, predWindows, futureWindow):
@@ -30,23 +33,24 @@ def makePredictorDataframe(spx, predWindows, futureWindow):
   for w in predWindows:
     clip['x' + str(w)] = makeroll(w).shift(futureWindow - 1)
   clip['y'] = makeroll(futureWindow)  # prediction: subsequent one year/day returns etc.
-
   clip = clip.dropna()
+  clip['year'] = [x.year for x in clip.date]
   return clip, predColumns
 
 
-def makePredictorDataframeMaxLoss(spx, predWindows, futureWindow):
+def makePredictorDataframeMaxLoss(spx, predWindows, futureWindow, roll=rollworst):
   clip = spx.copy()
   predColumns = ['x{}'.format(x) for x in predWindows] + ['y']
   for w in predWindows:
     clip['x' + str(w)] = makeroll(w).shift(futureWindow - 1)
-  clip['y'] = rollworst(futureWindow)
+  clip['y'] = roll(futureWindow)
   # Also add the open on the first day into the future for analysis the night before
   clip['xOvernight'] = pct(clip['open'].rolling(futureWindow).apply(
       lambda df: df[1], raw=True), clip['last'].rolling(futureWindow).apply(
           lambda df: df[0], raw=True)) * 100
   clip = clip.dropna()
-  return clip, predColumns, [makeroll(w).iloc[-futureWindow:] for w in predWindows]
+  clip['year'] = [x.year for x in clip.date]
+  return clip, predColumns, [makeroll(w).iloc[-1] for w in predWindows]
 
 
 def pct(new, old):
@@ -54,44 +58,47 @@ def pct(new, old):
   return (new - old) / old
 
 
+# Plotting the worst loss over a period (for potential put strategy)
+predWindows = [10, 15, 20]
+futureWindow = 4
+worstdf, predcols, current = makePredictorDataframeMaxLoss(spx, predWindows, futureWindow,
+                                                           rollworst)
+bestdf, _, _ = makePredictorDataframeMaxLoss(spx, predWindows, futureWindow, rollbest)
+print('CURRENTLY', current)
+
+
+def align(shax1, shax2, low=True):
+  ylabel = 'lowest next {}-session drop'.format(
+      futureWindow - 1) if low else 'highest next {}-session spike'.format(futureWindow - 1)
+  shax2.set_ylabel(ylabel)
+  shax2.set_xlabel('trailing {}-session pct return'.format(predWindows[-1]))
+  shax1.get_shared_x_axes().join(shax1, shax2)
+  shax1.get_shared_y_axes().join(shax1, shax2)
+
+
+shax1 = worstdf.plot.scatter(
+    x=predcols[-2], y='y', c='year', cmap='viridis', alpha=0.95, grid=True, s=40)
+plt.ylabel('lowest next {}-session drop'.format(futureWindow - 1))
+plt.xlabel('trailing {}-session pct return'.format(predWindows[-1]))
+
+shax2 = worstdf.plot.scatter(
+    x=predcols[-2], y='y', c='xOvernight', cmap='viridis', alpha=0.95, grid=True, s=40)
+align(shax1, shax2)
+
+shax3 = bestdf.plot.scatter(
+    x=predcols[-2], y='y', c='year', cmap='viridis', alpha=0.95, grid=True, s=40)
+shax3.set_ylabel('highest next {}-session spike'.format(futureWindow - 1))
+shax3.set_xlabel('trailing {}-session pct return'.format(predWindows[-1]))
+
+shax4 = bestdf.plot.scatter(
+    x=predcols[-2], y='y', c='xOvernight', cmap='viridis', alpha=0.95, grid=True, s=40)
+align(shax3, shax4, low=False)
+
+## Plots
 futureWindow = 2  # 2: final two-day window, i.e., one-day *change*
 predWindows = [2, 5, 15, 52 // 2 * 5, 52 * 5]
 clip, predColumns = makePredictorDataframe(spx, predWindows, futureWindow)
 
-# Plotting the worst loss over a period (for potential put strategy)
-worstClip = makePredictorDataframeMaxLoss(spx, [15, 17, 19], 6)
-worstClip[0]['year'] = [x.year for x in worstClip[0].date]
-plt.style.use('dark_background')
-plt.figure()
-axs = [plt.subplot(311)]
-axs = axs + [
-    plt.subplot(312, sharex=axs[0], sharey=axs[0]),
-    plt.subplot(313, sharex=axs[0], sharey=axs[0])
-]
-for ax, x in zip(axs, worstClip[1][:-1]):
-  worstClip[0].plot.scatter(
-      x=x, y='y', ax=ax, c='year', cmap='viridis', alpha=0.95, grid=True, s=30)
-# Not sure why y-ticks are lost
-shax1 = worstClip[0].plot.scatter(
-    x=worstClip[1][-2], y='y', c='year', cmap='viridis', alpha=0.95, grid=True, s=40)
-plt.ylabel('lowest next 5-session drop')
-plt.xlabel('trailing 19-session pct return')
-shax2 = worstClip[0].plot.scatter(
-    x=worstClip[1][-2],
-    y='y',
-    c='xOvernight',
-    cmap='viridis',
-    alpha=0.95,
-    grid=True,
-    s=40,
-    sharex=shax,
-    sharey=shax)
-plt.ylabel('lowest next 5-session drop')
-plt.xlabel('trailing 19-session pct return')
-shax1.get_shared_x_axes().join(shax1, shax2)
-shax1.get_shared_y_axes().join(shax1, shax2)
-
-## Plots
 predWindow = 15
 reg = pd.DataFrame(
     np.array([makeroll(predWindow).shift(+1), makeroll(2)]).T, columns='x y'.split()).dropna()
@@ -224,6 +231,7 @@ pred2 = gpLogret[0].predict(
 # stdev spikes up on 22Oct1987 and really on 23oct1987, when the crash was 19oct1987... It is out of sample though.
 
 from sklearn.model_selection import TimeSeriesSplit, cross_val_score
+Nsamples = 5000
 Nsamplesend = 60
 gpr = gp.GaussianProcessRegressor(kernel=kernel)
 tscv = TimeSeriesSplit(n_splits=60)
@@ -377,7 +385,6 @@ realax.set_ylabel('price (US dollars)')
 realax.yaxis.set_ticks_position('both')
 realax.xaxis.set_ticks_position('both')
 import matplotlib.ticker as ticker
-realax.yaxis.set_major_formatter(ticker.FormatStrFormatter('$%d'))
 
 nominal20raw = bullBearHelper(shiller['price'], shiller['date'], 12 * 3, -0.2)
 
