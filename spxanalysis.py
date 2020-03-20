@@ -17,6 +17,8 @@ where underlying="SPX"
 spx = cursor.fetchall()
 spx = pd.DataFrame([[dateutil.parser.parse(l[0])] + list(l[1:]) for l in spx],
                    columns=['date', 'last', 'open', 'low', 'high'])
+spx['weekday'] = [x.isoweekday() for x in spx.date]
+spx['year'] = [x.year for x in spx.date]
 
 makeroll = lambda n: spx['last'].rolling(n).apply(
     lambda df: (df[-1] - df[0]) / df[0], raw=True) * 100
@@ -42,7 +44,6 @@ def makePredictorDataframe(spx, predWindows, futureWindow):
     clip['x' + str(w)] = makeroll(w).shift(futureWindow - 1)
   clip['y'] = makeroll(futureWindow)  # prediction: subsequent one year/day returns etc.
   clip = clip.dropna()
-  clip['year'] = [x.year for x in clip.date]
   return clip, predColumns
 
 
@@ -103,6 +104,27 @@ shax3.set_xlabel('trailing {}-session pct return'.format(predWindows[-1]))
 shax4 = bestdf.plot.scatter(
     x=predcols[-2], y='y', c='xOvernight', cmap='viridis', alpha=0.95, grid=True, s=40)
 align(shax3, shax4, low=False)
+
+daysofweek = dict()
+for i, w in enumerate('Monday Tuesday Wednesday Thursday Friday'.split(' ')):
+  daysofweek[i + 1] = w
+predDayOfWeek = 1
+dayax = bestdf[bestdf.weekday == predDayOfWeek].plot.scatter(
+    x=predcols[-2], y='y', c='year', cmap='viridis', alpha=0.95, grid=True, s=40)
+dayax.set_ylabel('highest next {}-session spike'.format(futureWindow - 1))
+dayax.set_xlabel('trailing {}-session pct return'.format(predWindows[-1]))
+dayax.set_title('Expiring {}'.format(daysofweek[predDayOfWeek]))
+
+fig, dowaxs = plt.subplots(nrows=5, sharex=True, sharey=True)
+for predDayOfWeek, ax in zip(range(1, 6), dowaxs):
+  bestdf[bestdf.weekday == predDayOfWeek].plot.scatter(
+      x=predcols[-2], y='y', c='year', cmap='viridis', alpha=0.95, grid=True, s=40, ax=ax)
+  ax.set_ylabel('highest {}-session spike'.format(futureWindow - 1))
+
+dowaxs[-1].tick_params(axis='x', bottom=True, labelbottom=True)
+dowaxs[-1].set_xlabel('foo')
+dowaxs[0].set_title('Trailing {}-day vs highest forward {}-day % return: day of week'.format(
+    predWindows[-1], futureWindow - 1))
 
 ## Plots
 futureWindow = 2  # 2: final two-day window, i.e., one-day *change*
