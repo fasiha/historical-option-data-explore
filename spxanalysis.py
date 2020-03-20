@@ -67,13 +67,32 @@ def pct(new, old):
   return (new - old) / old
 
 
+def dayOfWeek(df, best=True):
+  fig, dowaxs = plt.subplots(nrows=5, sharex=True, sharey=True)
+  for predDayOfWeek, ax in zip(range(1, 6), dowaxs):
+    df[df.weekday == predDayOfWeek].plot.scatter(
+        x=predcols[-2], y='y', c='year', cmap='viridis', alpha=0.95, grid=True, s=40, ax=ax)
+    ax.set_ylabel(
+        ('highest {}-session spike' if best else 'lowest {}-session drop').format(futureWindow - 1))
+
+  dowaxs[-1].tick_params(axis='x', bottom=True, labelbottom=True)
+  dowaxs[0].set_title(
+      ('Trailing {}-day vs ' + ('highest' if best else 'lowest') +
+       ' forward {}-day % return: day of week').format(predWindows[-1], futureWindow - 1))
+
+
 # Plotting the worst loss over a period (for potential put strategy)
 predWindows = [21]
-futureWindow = 3
+futureWindow = 9 + 1
 worstdf, predcols, current = makePredictorDataframeMaxLoss(spx, predWindows, futureWindow,
                                                            rollworst)
 bestdf, _, _ = makePredictorDataframeMaxLoss(spx, predWindows, futureWindow, rollbest)
 print('CURRENTLY', current)
+
+dayOfWeek(bestdf)
+plt.xlim([-45, -10])
+dayOfWeek(worstdf, False)
+plt.xlim([-45, -10])
 
 
 def align(shax1, shax2, low=True):
@@ -104,18 +123,6 @@ shax3.set_xlabel('trailing {}-session pct return'.format(predWindows[-1]))
 shax4 = bestdf.plot.scatter(
     x=predcols[-2], y='y', c='xOvernight', cmap='viridis', alpha=0.95, grid=True, s=40)
 align(shax3, shax4, low=False)
-
-# day of week
-fig, dowaxs = plt.subplots(nrows=5, sharex=True, sharey=True)
-for predDayOfWeek, ax in zip(range(1, 6), dowaxs):
-  bestdf[bestdf.weekday == predDayOfWeek].plot.scatter(
-      x=predcols[-2], y='y', c='year', cmap='viridis', alpha=0.95, grid=True, s=40, ax=ax)
-  ax.set_ylabel('highest {}-session spike'.format(futureWindow - 1))
-
-dowaxs[-1].tick_params(axis='x', bottom=True, labelbottom=True)
-dowaxs[-1].set_xlabel('foo')
-dowaxs[0].set_title('Trailing {}-day vs highest forward {}-day % return: day of week'.format(
-    predWindows[-1], futureWindow - 1))
 
 ## Plots
 futureWindow = 2  # 2: final two-day window, i.e., one-day *change*
