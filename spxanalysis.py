@@ -105,16 +105,7 @@ shax4 = bestdf.plot.scatter(
     x=predcols[-2], y='y', c='xOvernight', cmap='viridis', alpha=0.95, grid=True, s=40)
 align(shax3, shax4, low=False)
 
-daysofweek = dict()
-for i, w in enumerate('Monday Tuesday Wednesday Thursday Friday'.split(' ')):
-  daysofweek[i + 1] = w
-predDayOfWeek = 1
-dayax = bestdf[bestdf.weekday == predDayOfWeek].plot.scatter(
-    x=predcols[-2], y='y', c='year', cmap='viridis', alpha=0.95, grid=True, s=40)
-dayax.set_ylabel('highest next {}-session spike'.format(futureWindow - 1))
-dayax.set_xlabel('trailing {}-session pct return'.format(predWindows[-1]))
-dayax.set_title('Expiring {}'.format(daysofweek[predDayOfWeek]))
-
+# day of week
 fig, dowaxs = plt.subplots(nrows=5, sharex=True, sharey=True)
 for predDayOfWeek, ax in zip(range(1, 6), dowaxs):
   bestdf[bestdf.weekday == predDayOfWeek].plot.scatter(
