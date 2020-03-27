@@ -81,6 +81,93 @@ def dayOfWeek(df, best=True):
        ' forward {}-day % return: day of week').format(predWindows[-1], futureWindow - 1))
 
 
+def minmax(v):
+  minloc = v.argmin()
+  maxloc = v.argmax()
+  oldidx, newidx = (minloc, maxloc) if minloc < maxloc else (maxloc, minloc)
+  return pct(v[newidx], v[oldidx])
+
+
+def worstDrawdown(v):
+  maxloc = v.argmax()
+  minloc = (v[maxloc:].argmin() + maxloc) if maxloc < (len(v) - 1) else maxloc
+  return pct(v[minloc], v[maxloc])
+
+
+def makeBearMarketDf(spx, trailingLoss=260, trailingChange=4, future=260):
+  clip = spx.copy()
+
+  trailingWorstDrawdown = clip['last'].rolling(trailingLoss).apply(worstDrawdown, raw=True) * 100
+  trailingPctChange = clip['last'].rolling(trailingChange).apply(
+      lambda df: pct(df[-1], df[0]), raw=True) * 100
+  futureMaxLoss = clip['last'].rolling(future).apply(
+      lambda df: pct(df[1:].min(), df[0]), raw=True) * 100
+  futureMaxGain = clip['last'].rolling(future).apply(
+      lambda df: pct(df[1:].max(), df[0]), raw=True) * 100
+
+  current = dict(
+      trailingWorstDrawdown=trailingWorstDrawdown.iloc[-1],
+      trailingPctChange=trailingPctChange.iloc[-1])
+
+  clip['trailingWorstDrawdown'] = trailingWorstDrawdown.shift(future - 1)
+  clip['trailingPctChange'] = trailingPctChange.shift(future - 1)
+  clip['futureMaxLoss'] = futureMaxLoss
+  clip['futureMaxGain'] = futureMaxGain
+
+  return (clip, current)
+
+
+# bear market analysis
+trailingLong = 260
+trailingShort = 4
+future = 260
+clip, current = makeBearMarketDf(spx, trailingLong, trailingShort, future)
+print('CURRENT', current)
+
+clip.plot.scatter(
+    x='trailingPctChange', y='futureMaxLoss', c='year', cmap='viridis', alpha=0.5, grid=True, s=40)
+plt.xlabel('Trailing {}-session pct change'.format(trailingShort))
+plt.ylabel('Future {}-session lowest pct change'.format(future))
+
+from matplotlib import colors
+divnorm = colors.TwoSlopeNorm(
+    vmin=clip.trailingWorstDrawdown.min(),
+    vcenter=current['trailingWorstDrawdown'],
+    vmax=clip.trailingWorstDrawdown.max())
+clip.plot.scatter(
+    x='trailingPctChange',
+    y='futureMaxLoss',
+    c='trailingWorstDrawdown',
+    cmap='PiYG',
+    norm=divnorm,
+    alpha=0.5,
+    grid=True,
+    s=40)
+plt.xlabel('Trailing {}-session pct change'.format(trailingShort))
+plt.ylabel('Future {}-session lowest pct change'.format(future))
+plt.gcf().get_axes()[1].set_ylabel('Trailing {}-session worst drawdown'.format(trailingLong))
+
+#
+clip.plot.scatter(
+    x='trailingPctChange',
+    y='futureMaxLoss',
+    c='futureMaxGain',
+    cmap='viridis',
+    alpha=0.5,
+    grid=True,
+    s=40)
+clip.plot.scatter(
+    x='trailingPctChange',
+    y='futureMaxGain',
+    c='trailingWorstDrawdown',
+    cmap='PiYG',
+    norm=divnorm,
+    alpha=0.5,
+    grid=True,
+    s=40)
+
+# clip.plot.hexbin(x='trailingPctChange', y='futureMaxLoss')
+
 # Plotting the worst loss over a period (for potential put strategy)
 predWindows = [21]
 futureWindow = 9 + 1
