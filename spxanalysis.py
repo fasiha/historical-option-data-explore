@@ -1,3 +1,4 @@
+from matplotlib import colors
 import dateutil
 import statsmodels.api as sm
 import seaborn as sns
@@ -124,47 +125,39 @@ future = 260
 clip, current = makeBearMarketDf(spx, trailingLong, trailingShort, future)
 print('CURRENT', current)
 
-clip.plot.scatter(
-    x='trailingPctChange', y='futureMaxLoss', c='year', cmap='viridis', alpha=0.5, grid=True, s=40)
-plt.xlabel('Trailing {}-session pct change'.format(trailingShort))
-plt.ylabel('Future {}-session lowest pct change'.format(future))
+fig, (axhi, axlo) = plt.subplots(nrows=2, sharex=True)
+same = dict(c='year', cmap='viridis', alpha=0.5, grid=True, s=40, x='trailingPctChange')
+clip.plot.scatter(y='futureMaxLoss', ax=axlo, **same)
+clip.plot.scatter(y='futureMaxGain', ax=axhi, **same)
+axlo.tick_params(axis='x', bottom=True, labelbottom=True)
+axlo.set_xlabel('Trailing {}-session pct change'.format(trailingShort))  # ??
+axlo.set_ylabel('Future {}-session lowest pct change'.format(future))
+axhi.set_ylabel('Future {}-session highest pct change'.format(future))
+axhi.set_title('S&P500, 1928–present (data: Yahoo Finance)')
+axlo.tick_params(axis='x', bottom=True, labelbottom=True)
+axlo.xaxis.get_label().set_visible(True)
 
-from matplotlib import colors
-divnorm = colors.TwoSlopeNorm(
+#
+norm = colors.TwoSlopeNorm(
     vmin=clip.trailingWorstDrawdown.min(),
     vcenter=current['trailingWorstDrawdown'],
     vmax=clip.trailingWorstDrawdown.max())
-clip.plot.scatter(
-    x='trailingPctChange',
-    y='futureMaxLoss',
-    c='trailingWorstDrawdown',
-    cmap='PiYG',
-    norm=divnorm,
-    alpha=0.5,
-    grid=True,
-    s=40)
-plt.xlabel('Trailing {}-session pct change'.format(trailingShort))
-plt.ylabel('Future {}-session lowest pct change'.format(future))
-plt.gcf().get_axes()[1].set_ylabel('Trailing {}-session worst drawdown'.format(trailingLong))
 
-#
-clip.plot.scatter(
-    x='trailingPctChange',
-    y='futureMaxLoss',
-    c='futureMaxGain',
-    cmap='viridis',
-    alpha=0.5,
-    grid=True,
-    s=40)
-clip.plot.scatter(
-    x='trailingPctChange',
-    y='futureMaxGain',
-    c='trailingWorstDrawdown',
-    cmap='PiYG',
-    norm=divnorm,
-    alpha=0.5,
-    grid=True,
-    s=40)
+fig, (axhi, axlo) = plt.subplots(nrows=2, sharex=True)
+same = dict(cmap='PiYG', norm=norm, alpha=0.5, grid=True, s=40, x='trailingPctChange')
+clip.plot.scatter(c='trailingWorstDrawdown', y='futureMaxLoss', ax=axlo, **same)
+clip.plot.scatter(c='trailingWorstDrawdown', y='futureMaxGain', ax=axhi, **same)
+axlo.tick_params(axis='x', bottom=True, labelbottom=True)
+axlo.set_xlabel('Trailing {}-session pct change'.format(trailingShort))  # ??
+axlo.set_ylabel('Future {}-session lowest pct change'.format(future))
+axhi.set_ylabel('Future {}-session highest pct change'.format(future))
+axhi.set_title('S&P500, 1928–present (data: Yahoo Finance)')
+[
+    x.set_ylabel('Trailing {}-session worst drawdown'.format(trailingLong))
+    for x in plt.gcf().get_axes()[2:]
+]
+axlo.tick_params(axis='x', bottom=True, labelbottom=True)
+axlo.xaxis.get_label().set_visible(True)
 
 # clip.plot.hexbin(x='trailingPctChange', y='futureMaxLoss')
 
